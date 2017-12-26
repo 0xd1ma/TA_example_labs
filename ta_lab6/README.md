@@ -46,7 +46,7 @@ roslaunch ta_lab6 follow_trajectory.launch
 Once those are running, you can use the trajectory loader node to initialize pure pursuit with a trajectory.
 
 ```
-roslaunch ta_lab6 trajectory_loader.launch
+roslaunch ta_lab6 load_trajectory.launch
 ```
 
 ### Pure Pursuit + Path planning: Waypoint based control
