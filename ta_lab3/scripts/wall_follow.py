@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
 import rospy
+from geometry_msgs.msg import Twist
 from std_msgs.msg import String, Header
 import numpy as np
 from threading import Thread #imsosorry
-from ackermann_msgs.msg import AckermannDriveStamped, AckermannDrive
 from sensor_msgs.msg import LaserScan
 from scipy import signal, stats
 import matplotlib.pyplot as plt
@@ -15,16 +15,16 @@ RIGHT = 'right'
 LEFT  = 'left'
 
 SHOW_VIS = False
-FAN_ANGLE = np.pi/5.0
-TARGET_DISTANCE = 1.0
-MEDIAN_FILTER_SIZE=141
-KP = 0.4 # distance term
-KD = 0.3  # angle term
+FAN_ANGLE = np.pi/8.0 #36
+TARGET_DISTANCE = 0.6
+MEDIAN_FILTER_SIZE=9#141
+KP = 1.8 # distance term
+KD = 0.5  # angle term
 # KD = 0.5  # angle term
 PUBLISH_LINE = True
-HISTORY_SIZE = 5 # Size of the circular array for smoothing steering commands
-PUBLISH_RATE = 20.0 # number of control commands to publish per second
-SPEED = 1.0
+HISTORY_SIZE = 8 # Size of the circular array for smoothing steering commands
+PUBLISH_RATE = 10.0 # number of control commands to publish per second
+SPEED = 0.1
 
 EPSILON = 0.000001
 
@@ -97,9 +97,8 @@ class WallFollow():
             self.viz = DynamicPlot()
             self.viz.initialize()
         
-        self.pub = rospy.Publisher("/vesc/high_level/ackermann_cmd_mux/input/nav_0",\
-                AckermannDriveStamped, queue_size =1 )
         self.sub = rospy.Subscriber("/scan", LaserScan, self.lidarCB, queue_size=1)
+        self.cmd_vel_pub = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=10)
         
         if PUBLISH_LINE:
             self.line_pub = rospy.Publisher("/viz/line_fit", PolygonStamped, queue_size =1 )
@@ -159,15 +158,11 @@ class WallFollow():
 
     def drive_straight(self):
         while not rospy.is_shutdown():
-            drive_msg_stamped = AckermannDriveStamped()
-            drive_msg = AckermannDrive()
-            drive_msg.speed = 2.0
-            drive_msg.steering_angle = 0.0
-            drive_msg.acceleration = 0
-            drive_msg.jerk = 0
-            drive_msg.steering_angle_velocity = 0
-            drive_msg_stamped.drive = drive_msg
-            self.pub.publish(drive_msg_stamped)
+            move_cmd = Twist()
+            move_cmd.linear.x = 0.1
+            move_cmd.angular.z = 0
+
+            self.cmd_vel_pub.publish(move_cmd)
 
             # don't spin too fast
             rospy.sleep(1.0/PUBLISH_RATE)
@@ -184,15 +179,11 @@ class WallFollow():
 
                 # print smoothed_steering, self.control[0]
                 
-                drive_msg_stamped = AckermannDriveStamped()
-                drive_msg = AckermannDrive()
-                drive_msg.speed = self.control[1]
-                drive_msg.steering_angle = smoothed_steering
-                drive_msg.acceleration = 0
-                drive_msg.jerk = 0
-                drive_msg.steering_angle_velocity = 0
-                drive_msg_stamped.drive = drive_msg
-                self.pub.publish(drive_msg_stamped)
+                move_cmd = Twist()
+                move_cmd.linear.x = self.control[1]
+                move_cmd.angular.z = smoothed_steering
+
+                self.cmd_vel_pub.publish(move_cmd)                
 
                 rospy.sleep(1.0/PUBLISH_RATE)
 
@@ -244,7 +235,8 @@ class WallFollow():
             self.laser_angles = (np.arange(len(msg.ranges)) * msg.angle_increment) + msg.angle_min
 
         self.data = msg.ranges
-        values = np.array(msg.ranges)
+        tmp = np.array(msg.ranges)
+        values = tmp[::-1]
 
         # remove out of range values
         ranges = values[(values > msg.range_min) & (values < msg.range_max)]
@@ -286,5 +278,5 @@ class WallFollow():
 
 if __name__=="__main__":
     rospy.init_node("wall_follow")
-    WallFollow(RIGHT)
+    WallFollow(LEFT)
     rospy.spin()
