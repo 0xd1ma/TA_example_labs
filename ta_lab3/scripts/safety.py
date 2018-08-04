@@ -2,7 +2,7 @@
 import rospy
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String, Header
-from ackermann_msgs.msg import AckermannDriveStamped, AckermannDrive
+from geometry_msgs.msg import Twist
 from threading import Thread #imsosorry
 
 import pdb
@@ -51,8 +51,8 @@ class Safety():
         self.averages = None
 
         self.sub = rospy.Subscriber("/scan", LaserScan, self.lidarCB, queue_size=1)
-        self.pub = rospy.Publisher("/vesc/low_level/ackermann_cmd_mux/input/safety",\
-                AckermannDriveStamped, queue_size =1 )
+        self.cmd_vel_pub = rospy.Publisher('/cmd_vel_mux/input/navi', Twist, queue_size=10)
+        
         self.thread = Thread(target=self.drive)
         self.thread.start()
         rospy.loginfo("safety node initialized")
@@ -65,17 +65,8 @@ class Safety():
 
             if np.any(self.parsed_data['front'][:,0] < MIN_FRONT_DIST):
                 rospy.loginfo("stoping!")
-                # this is overkill to specify the message, but it doesn't hurt
-                # to be overly explicit
-                drive_msg_stamped = AckermannDriveStamped()
-                drive_msg = AckermannDrive()
-                drive_msg.speed = 0.0
-                drive_msg.steering_angle = 0.0
-                drive_msg.acceleration = 0
-                drive_msg.jerk = 0
-                drive_msg.steering_angle_velocity = 0
-                drive_msg_stamped.drive = drive_msg
-                self.pub.publish(drive_msg_stamped)
+                rospy.loginfo("Stop TurtleBot")
+                self.cmd_vel_pub.publish(Twist())
             
             # don't spin too fast
             rospy.sleep(.1)

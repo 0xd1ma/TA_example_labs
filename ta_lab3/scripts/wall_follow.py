@@ -7,20 +7,21 @@ import numpy as np
 from threading import Thread #imsosorry
 from sensor_msgs.msg import LaserScan
 from scipy import signal, stats
-import matplotlib.pyplot as plt
 import math
 from geometry_msgs.msg import Polygon, Point32, PolygonStamped
+
+from circular_array import CircularArray
+from dynamic_plot import DynamicPlot
 
 RIGHT = 'right'
 LEFT  = 'left'
 
-SHOW_VIS = False
-FAN_ANGLE = np.pi/8.0 #36
+SHOW_VIS = True
+FAN_ANGLE = np.pi/8.0 
 TARGET_DISTANCE = 0.6
-MEDIAN_FILTER_SIZE=9#141
+MEDIAN_FILTER_SIZE = 9#141
 KP = 1.8 # distance term
 KD = 0.5  # angle term
-# KD = 0.5  # angle term
 PUBLISH_LINE = True
 HISTORY_SIZE = 8 # Size of the circular array for smoothing steering commands
 PUBLISH_RATE = 10.0 # number of control commands to publish per second
@@ -28,70 +29,16 @@ SPEED = 0.1
 
 EPSILON = 0.000001
 
-class CircularArray(object):
-    """docstring for CircularArray"""
-    def __init__(self, size):
-        self.arr = np.zeros(size)
-        self.ind = 0
-        self.num_els = 0
-
-    def append(self, value):
-        if self.num_els < self.arr.shape[0]:
-            self.num_els += 1
-        self.arr[self.ind] = value
-        self.ind = (self.ind + 1) % self.arr.shape[0]
-
-    def mean(self):
-        return np.mean(self.arr[:self.num_els])
-
-    def median(self):
-        return np.median(self.arr[:self.num_els])
-
-# this is a convenient class for visualizing data while developing in Python
-# once your code is done, you should instead use RViz to visualize important
-# intermediate products as you see fit
-class DynamicPlot():
-    def initialize(self):
-        plt.ion()
-        #Set up plot
-        self.fig = plt.figure(figsize=plt.figaspect(2.))
-        
-        self.ax0 = self.fig.add_subplot(2,1,1)
-
-        self.laser_angular, = self.ax0.plot([],[], 'r.')
-        self.laser_filtered, = self.ax0.plot([],[], 'b-')
-
-        self.ax0.set_ylim(-1, 15)
-        self.ax0.set_xlim(-np.pi, +np.pi)
-        self.ax0.invert_xaxis()
-        self.ax0.grid()
-
-        self.ax1 = self.fig.add_subplot(2,1,2) 
-        self.ax1.invert_xaxis()
-        self.ax1.grid()
-        self.laser_euclid, = self.ax1.plot([],[], '.')
-        self.laser_regressed, = self.ax1.plot([],[], 'g')
-        
-        self.redraw()
-        
-    def redraw(self):
-        #Need both of these in order to rescale
-        self.ax0.relim()
-        self.ax0.autoscale_view()
-        
-        self.ax1.relim()
-        self.ax1.autoscale_view()
-        
-        #We need to draw *and* flush
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
-
 class WallFollow():
     def __init__(self, direction):
         if direction not in [RIGHT, LEFT]:
             rospy.loginfo("incorect %s wall selected.  choose left or right")
             rospy.signal_shutdown()
+            
         self.direction = direction
+        
+	    rospy.loginfo("To stop TurtleBot CTRL + C")
+        rospy.on_shutdown(self.shutdown)        
 
         if SHOW_VIS:
             self.viz = DynamicPlot()
@@ -236,6 +183,8 @@ class WallFollow():
 
         self.data = msg.ranges
         tmp = np.array(msg.ranges)
+        
+        # invert lidar(flip mounted)
         values = tmp[::-1]
 
         # remove out of range values
@@ -275,6 +224,14 @@ class WallFollow():
             self.viz.laser_euclid.set_data(self.xs, self.ys)
             self.viz.laser_regressed.set_data(self.xs, self.m*self.xs+self.c)
             self.viz.redraw()
+            
+    def shutdown(self):
+        # stop turtlebot
+        rospy.loginfo("Stop TurtleBot")
+	    # a default Twist has linear.x of 0 and angular.z of 0.  So it'll stop TurtleBot
+        self.cmd_vel_pub.publish(Twist())
+	    # sleep just makes sure TurtleBot receives the stop command prior to shutting down the script
+        rospy.sleep(1)            
 
 if __name__=="__main__":
     rospy.init_node("wall_follow")
