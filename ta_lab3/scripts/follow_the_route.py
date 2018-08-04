@@ -29,7 +29,8 @@ from geometry_msgs.msg import PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
 
 def amcl_pose_callback(msg):
-    print msg.pose.pose
+    #print msg.pose.pose
+    a = 1
     
 def odometry_callback(msg):
     global old_x
@@ -55,8 +56,6 @@ if __name__ == '__main__':
         dataMap = yaml.load(stream)
     try:
         rospy.init_node('follow_route', anonymous=False)
-        
-        global wall_session
         
         rospy.Subscriber('amcl_pose', PoseWithCovarianceStamped, amcl_pose_callback)
         rospy.Subscriber("odom", Odometry, odometry_callback)
@@ -97,7 +96,9 @@ if __name__ == '__main__':
                 wall_session = True
                 wall.start()
             
-                while distance < 3.0:
+                while distance < obj['distance']:
+		    if rospy.is_shutdown():
+                	break
                     rospy.loginfo("Distance is: %s", distance)
                     rospy.sleep(0.1)
                     
