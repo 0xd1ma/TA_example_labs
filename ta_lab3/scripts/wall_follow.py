@@ -16,7 +16,7 @@ from dynamic_plot import DynamicPlot
 RIGHT = 'right'
 LEFT  = 'left'
 
-SHOW_VIS = True
+SHOW_VIS = False
 FAN_ANGLE = np.pi/8.0 
 TARGET_DISTANCE = 0.6
 MEDIAN_FILTER_SIZE = 9#141
@@ -37,7 +37,7 @@ class WallFollow():
             
         self.direction = direction
         
-	    rospy.loginfo("To stop TurtleBot CTRL + C")
+        rospy.loginfo("To stop TurtleBot CTRL + C")
         rospy.on_shutdown(self.shutdown)        
 
         if SHOW_VIS:
@@ -64,6 +64,9 @@ class WallFollow():
         # flag to indicate the first laser scan has been received
         self.received_data = False
         
+        # flag for start/stop following
+        self.follow_the_wall = False
+        
         # cached constants
         self.min_angle = None
         self.max_angle = None
@@ -77,7 +80,13 @@ class WallFollow():
             while not rospy.is_shutdown():
                 self.viz_loop()
                 rospy.sleep(0.1)
-
+    
+    def stop(self):
+        self.follow_the_wall = False
+        
+    def start(self):
+        self.follow_the_wall = True
+    
     def publish_line(self):
         # find the two points that intersect between the fan angle lines and the found y=mx+c line
         x0 = self.c / (np.tan(FAN_ANGLE) - self.m)
@@ -120,17 +129,18 @@ class WallFollow():
                 print "No control data"
                 rospy.sleep(0.5)
             else:
-                self.steering_hist.append(self.control[0])
-                # smoothed_steering = self.steering_hist.mean()
-                smoothed_steering = self.steering_hist.median()
+                if self.follow_the_wall:
+                    self.steering_hist.append(self.control[0])
+                    # smoothed_steering = self.steering_hist.mean()
+                    smoothed_steering = self.steering_hist.median()
 
-                # print smoothed_steering, self.control[0]
+                    # print smoothed_steering, self.control[0]
                 
-                move_cmd = Twist()
-                move_cmd.linear.x = self.control[1]
-                move_cmd.angular.z = smoothed_steering
+                    move_cmd = Twist()
+                    move_cmd.linear.x = self.control[1]
+                    move_cmd.angular.z = smoothed_steering
 
-                self.cmd_vel_pub.publish(move_cmd)                
+                    self.cmd_vel_pub.publish(move_cmd)                
 
                 rospy.sleep(1.0/PUBLISH_RATE)
 
@@ -181,41 +191,44 @@ class WallFollow():
             self.max_angle = center_angle + FAN_ANGLE
             self.laser_angles = (np.arange(len(msg.ranges)) * msg.angle_increment) + msg.angle_min
 
-        self.data = msg.ranges
-        tmp = np.array(msg.ranges)
-        
-        # invert lidar(flip mounted)
-        values = tmp[::-1]
-
-        # remove out of range values
-        ranges = values[(values > msg.range_min) & (values < msg.range_max)]
-        angles = self.laser_angles[(values > msg.range_min) & (values < msg.range_max)]
-
-        # apply median filter to clean outliers
-        filtered_ranges = signal.medfilt(ranges, MEDIAN_FILTER_SIZE)
-
-        # apply a window function to isolate values to the side of the car
-        window = (angles > self.min_angle) & (angles < self.max_angle)
-        filtered_ranges = filtered_ranges[window]
-        filtered_angles = angles[window]
-
-        # convert from polar to euclidean coordinate space
-        self.ys = filtered_ranges * np.cos(filtered_angles)
-        self.xs = filtered_ranges * np.sin(filtered_angles)
-
-        self.fit_line()
-        self.compute_pd_control()
-
         # filter lidar data to clean it up and remove outlisers
         self.received_data = True
+            
+        if self.follow_the_wall:
+            
+            self.data = msg.ranges
+            tmp = np.array(msg.ranges)
+        
+            # invert lidar(flip mounted)
+            values = tmp[::-1]
 
-        if PUBLISH_LINE:
-            self.publish_line()
+            # remove out of range values
+            ranges = values[(values > msg.range_min) & (values < msg.range_max)]
+            angles = self.laser_angles[(values > msg.range_min) & (values < msg.range_max)]
 
-        if SHOW_VIS:
-            # cache data for development visualization
-            self.filtered_ranges = filtered_ranges
-            self.filtered_angles = filtered_angles
+            # apply median filter to clean outliers
+            filtered_ranges = signal.medfilt(ranges, MEDIAN_FILTER_SIZE)
+
+            # apply a window function to isolate values to the side of the car
+            window = (angles > self.min_angle) & (angles < self.max_angle)
+            filtered_ranges = filtered_ranges[window]
+            filtered_angles = angles[window]
+
+            # convert from polar to euclidean coordinate space
+            self.ys = filtered_ranges * np.cos(filtered_angles)
+            self.xs = filtered_ranges * np.sin(filtered_angles)
+
+            self.fit_line()
+            self.compute_pd_control()
+
+
+            if PUBLISH_LINE:
+                self.publish_line()
+
+            if SHOW_VIS:
+                # cache data for development visualization
+                self.filtered_ranges = filtered_ranges
+                self.filtered_angles = filtered_angles
 
     def viz_loop(self):
         if self.received_data == True:
@@ -226,14 +239,12 @@ class WallFollow():
             self.viz.redraw()
             
     def shutdown(self):
-        # stop turtlebot
         rospy.loginfo("Stop TurtleBot")
-	    # a default Twist has linear.x of 0 and angular.z of 0.  So it'll stop TurtleBot
         self.cmd_vel_pub.publish(Twist())
-	    # sleep just makes sure TurtleBot receives the stop command prior to shutting down the script
-        rospy.sleep(1)            
+        rospy.sleep(1)
 
 if __name__=="__main__":
     rospy.init_node("wall_follow")
-    WallFollow(LEFT)
+    f = WallFollow(LEFT)
+    f.start()
     rospy.spin()
