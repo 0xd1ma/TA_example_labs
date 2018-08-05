@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 import rospy
 import math
 
@@ -14,8 +13,6 @@ import json
 
 from io import BytesIO
 
-url = 'http://127.0.0.1:8088/photo'
-
 session_state = False
 
 photo_count = 0
@@ -25,33 +22,15 @@ rackid = 0
 old_x = 0.0
 old_y = 0.0
 
-def dumpclean(obj):
-    if type(obj) == dict:
-        for k, v in obj.items():
-            if hasattr(v, '__iter__'):
-                print k
-                dumpclean(v)
-            else:
-                print '%s : %s' % (k, v)
-    elif type(obj) == list:
-        for v in obj:
-            if hasattr(v, '__iter__'):
-                dumpclean(v)
-            else:
-                print v
-    else:
-        print obj
-        
-def take_goods_photo(ses,rac,cnt):
-
-    params = {'session': 1, 'rackid': 1, 'count': 1}
+#start session
+#http://ip:port/startSession?planogramId=1&offset=0
+def start_session():
+    url = 'http://127.0.0.1:8088/startSession'
+    params = {'planogramId': 1, 'offset': 0}
+    
     data = BytesIO()
 
     c = pycurl.Curl()
-
-    params["session"] = ses
-    params["rackid"] = rac
-    params["count"] = cnt
 
     c.setopt( pycurl.URL, url + '?' + urllib.urlencode(params) )
     c.setopt(pycurl.HTTPGET, True)
@@ -62,10 +41,52 @@ def take_goods_photo(ses,rac,cnt):
 
     dictionary = json.loads(data.getvalue())
 
-    #dumpclean(dictionary)
+    return dictionary["status"]        
+
+
+#take the photo
+#http://ip:port/photo?offset=1
+def take_the_photo(num):
+    url = 'http://127.0.0.1:8088/photo'
+    params = {'offset': num}
+    
+    data = BytesIO()
+
+    c = pycurl.Curl()
+
+    c.setopt( pycurl.URL, url + '?' + urllib.urlencode(params) )
+    c.setopt(pycurl.HTTPGET, True)
+    c.setopt( pycurl.WRITEFUNCTION, data.write )
+ 
+    c.perform()
+    c.close()
+
+    dictionary = json.loads(data.getvalue())
 
     return dictionary["status"]
 
+
+#end of session
+#http://ip:port/endSession?offset=0 
+def end_session():
+    url = 'http://127.0.0.1:8088/endSession'
+    params = {'offset': 0}
+    
+    data = BytesIO()
+
+    c = pycurl.Curl()
+
+    c.setopt( pycurl.URL, url + '?' + urllib.urlencode(params) )
+    c.setopt(pycurl.HTTPGET, True)
+    c.setopt( pycurl.WRITEFUNCTION, data.write )
+ 
+    c.perform()
+    c.close()
+
+    dictionary = json.loads(data.getvalue())
+
+    return dictionary["status"]         
+        
 def odometry_callback(msg):
     global old_x
     global old_y
@@ -97,15 +118,23 @@ def odometry_callback(msg):
 
             rospy.loginfo("I toke photo number: %s", photo_count)
             
-            # Take photo from cameras
-            if take_goods_photo(session, rackid, photo_count) == 'ok':
-                print 'all right'            
+            # Take the photo from cameras
+            if take_the_photo(photo_count) == 'ok':
+                rospy.loginfo("I heard ok by photo service")
+            else:
+                rospy.logerr("I heard error by photo service")
 
         
 def state_callback(msg):
     global session_state     
     session_state = msg.data
+    
     rospy.loginfo("I heard state: %s", session_state)
+    
+    if session_state == True:
+        start_session()
+    else:
+        end_session()
     
 def rack_id_callback(msg):
     global rackid
@@ -131,4 +160,8 @@ def photo():
     rospy.spin()
 
 if __name__ == '__main__':
-    photo()
+    try:
+        photo()
+    except:
+        rospy.loginfo("photo node terminated.")
+        

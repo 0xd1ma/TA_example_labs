@@ -64,8 +64,8 @@ class Safety():
                 continue
 
             if np.any(self.parsed_data['front'][:,0] < MIN_FRONT_DIST):
-                rospy.loginfo("stoping!")
-                rospy.loginfo("Stop TurtleBot")
+                #rospy.loginfo("stoping!")
+                #rospy.loginfo("Stop TurtleBot")
                 self.cmd_vel_pub.publish(Twist())
             
             # don't spin too fast
@@ -128,4 +128,5 @@ if __name__=="__main__":
     rospy.init_node("lidar_safety")
     Safety()
     rospy.spin()
+
 

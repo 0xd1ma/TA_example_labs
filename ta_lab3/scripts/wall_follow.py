@@ -126,7 +126,7 @@ class WallFollow():
     def apply_control(self):
         while not rospy.is_shutdown():
             if self.control is None:
-                print "No control data"
+                #print "No control data"
                 rospy.sleep(0.5)
             else:
                 if self.follow_the_wall:

@@ -57,16 +57,16 @@ if __name__ == '__main__':
     try:
         rospy.init_node('follow_route', anonymous=False)
         
-        rospy.Subscriber('amcl_pose', PoseWithCovarianceStamped, amcl_pose_callback)
-        rospy.Subscriber("odom", Odometry, odometry_callback)
+        rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, amcl_pose_callback)
+        rospy.Subscriber("/odom", Odometry, odometry_callback)
         
-        start_session_pub = rospy.Publisher('photo/start_session', Bool, queue_size=10)
+        start_session_pub = rospy.Publisher('/photo/start_session', Bool, queue_size=10)
         session_state_msg = Bool()
         
-        session_num_pub = rospy.Publisher('photo/session_num', UInt32, queue_size=10)
+        session_num_pub = rospy.Publisher('/photo/session_num', UInt32, queue_size=10)
         session_num_msg = UInt32()
         
-        rack_id_pub = rospy.Publisher('photo/rack_id', UInt32, queue_size=10)
+        rack_id_pub = rospy.Publisher('/photo/rack_id', UInt32, queue_size=10)
         rack_id_msg = UInt32()
 
         navigator = GoToPose()
@@ -83,28 +83,35 @@ if __name__ == '__main__':
             
             session_num_msg = obj['session']
             rack_id_msg = obj['rackid']
-            session_state_msg = True
 
             rospy.loginfo("Go to %s pose of rack %s", name[:-4], rack_id_msg)
 
-            start_session_pub.publish(session_state_msg)
-            session_num_pub.publish(session_num_msg)
-            rack_id_pub.publish(rack_id_msg)
-
             if obj['rackid'] != 0:
-                rospy.loginfo("Start wall")
+                rospy.loginfo("Start wall follower")
+                
                 wall_session = True
+                session_state_msg = True
+                
                 wall.start()
+                
+                start_session_pub.publish(session_state_msg)
+                session_num_pub.publish(session_num_msg)
+                rack_id_pub.publish(rack_id_msg)
             
                 while distance < obj['distance']:
-		    if rospy.is_shutdown():
-                	break
+                    if rospy.is_shutdown():
+                        break
                     rospy.loginfo("Distance is: %s", distance)
                     rospy.sleep(0.1)
                     
-                rospy.loginfo("Stop wall")                
+                rospy.loginfo("Stop wall follower")
+                
                 wall.stop()
+                
                 wall_session = False
+                session_state_msg = False
+                
+                start_session_pub.publish(session_state_msg)
                 
             else:
                 rospy.loginfo("Start navi")
@@ -122,10 +129,7 @@ if __name__ == '__main__':
                 rospy.loginfo("Saved image " + name)
             else:
                 rospy.loginfo("No images received")
-                
-            session_state_msg = False
-            start_session_pub.publish(session_state_msg)
-            
+
             rospy.sleep(1)
             
         rospy.loginfo("Mission complete")
