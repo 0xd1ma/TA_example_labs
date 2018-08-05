@@ -45,7 +45,7 @@ class WallFollow():
             self.viz.initialize()
         
         self.sub = rospy.Subscriber("/scan", LaserScan, self.lidarCB, queue_size=1)
-        self.cmd_vel_pub = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=10)
+        self.cmd_vel_pub = rospy.Publisher('/cmd_vel_mux/input/wall_follower', Twist, queue_size=10)
         
         if PUBLISH_LINE:
             self.line_pub = rospy.Publisher("/viz/line_fit", PolygonStamped, queue_size =1 )

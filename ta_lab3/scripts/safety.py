@@ -37,8 +37,8 @@ float32[] intensities # intensity data [device-specific units]. If your
 
 """
 
-MIN_FRONT_DIST = 1.0 # meters
-FAN_ANGLE = 15.0 # angle that is considered the front
+MIN_FRONT_DIST = 0.4 # meters
+FAN_ANGLE = 90.0 # angle that is considered the front
 N_BINS = 19
 
 class Safety():
@@ -51,7 +51,7 @@ class Safety():
         self.averages = None
 
         self.sub = rospy.Subscriber("/scan", LaserScan, self.lidarCB, queue_size=1)
-        self.cmd_vel_pub = rospy.Publisher('/cmd_vel_mux/input/navi', Twist, queue_size=10)
+        self.cmd_vel_pub = rospy.Publisher('/cmd_vel_mux/input/laser_safety', Twist, queue_size=10)
         
         self.thread = Thread(target=self.drive)
         self.thread.start()
